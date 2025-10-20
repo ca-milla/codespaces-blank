@@ -1,19 +1,126 @@
-<head>
-    <title>{{ title }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+<!doctype html>
+<html lang="en">
 
-<body>
-    <div class="App">
-        <header class="App-header">
-            <img src="{{ url_for('static', filename='Octocat.png') }}" class="App-logo" alt="logo" />
-            <p>
-                GitHub Codespaces <span class="heart">♥️</span> Flask
-            </p>
-            <p class="small">
-                Edit <code>templates/index.html</code> and refresh to see your changes!
-            </p>
-        </header>
-    </div>
-</body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{{ title }}</title>
+        <!-- Vuetify via CDN (simple) -->
+        <link href="https://cdn.jsdelivr.net/npm/vuetify@2.7.1/dist/vuetify.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    </head>
+
+    <body>
+        <div id="app">
+            <v-app>
+                <v-main>
+                    <v-container>
+                        <v-row>
+                            <v-col cols="12">
+                                <h1>Very simple LM demo</h1>
+                                <p>Provide a link to a .txt file (or local path) to train a tiny bigram model, then interactively generate text.</p>
+                            </v-col>
+
+                            <v-col cols="12" md="8">
+                                <v-text-field v-model="txtUrl" label="Text URL or local path"></v-text-field>
+                            </v-col>
+                            <v-col cols="12" md="4">
+                                <v-btn color="primary" @click="train" :loading="loadingTrain">Train</v-btn>
+                            </v-col>
+
+                            <v-col cols="12">
+                                <v-alert v-if="trainMsg" type="success">{{ trainMsg }}</v-alert>
+                                <v-alert v-if="trainError" type="error">{{ trainError }}</v-alert>
+                            </v-col>
+
+                            <v-col cols="12" md="6">
+                                <v-text-field v-model="prompt" label="Prompt (optional)"></v-text-field>
+                            </v-col>
+                            <v-col cols="6" md="3">
+                                <v-text-field v-model.number="length" type="number" label="Max length"></v-text-field>
+                            </v-col>
+                            <v-col cols="6" md="3">
+                                <v-btn color="secondary" @click="generate" :loading="loadingGen">Generate</v-btn>
+                            </v-col>
+
+                            <v-col cols="12">
+                                <v-card>
+                                    <v-card-title>Output</v-card-title>
+                                    <v-card-text>
+                                        <div v-if="output">{{ output }}</div>
+                                        <div v-else class="small">No output yet</div>
+                                    </v-card-text>
+                                </v-card>
+                            </v-col>
+                        </v-row>
+                    </v-container>
+                </v-main>
+            </v-app>
+        </div>
+
+        <!-- Vue + Vuetify runtime from CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vuetify@2.7.1/dist/vuetify.js"></script>
+
+        <script>
+            new Vue({
+                el: '#app',
+                vuetify: new Vuetify(),
+                data: () => ({
+                    txtUrl: '',
+                    prompt: '',
+                    length: 20,
+                    loadingTrain: false,
+                    loadingGen: false,
+                    trainMsg: '',
+                    trainError: '',
+                    output: ''
+                }),
+                methods: {
+                    async train() {
+                        this.trainMsg = ''
+                        this.trainError = ''
+                        this.loadingTrain = true
+                        try {
+                            const res = await fetch('/train', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ url: this.txtUrl })
+                            })
+                            const j = await res.json()
+                            if (j.ok) {
+                                this.trainMsg = `Trained. vocab=${j.vocab_size} unigrams=${j.unigrams} bigrams=${j.bigrams}`
+                            } else {
+                                this.trainError = j.error || 'train failed'
+                            }
+                        } catch (e) {
+                            this.trainError = String(e)
+                        } finally {
+                            this.loadingTrain = false
+                        }
+                    },
+                    async generate() {
+                        this.output = ''
+                        this.loadingGen = true
+                        try {
+                            const res = await fetch('/generate', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ prompt: this.prompt, length: this.length })
+                            })
+                            const j = await res.json()
+                            if (j.ok) this.output = j.output
+                            else this.output = `Error: ${j.error}`
+                        } catch (e) {
+                            this.output = String(e)
+                        } finally {
+                            this.loadingGen = false
+                        }
+                    }
+                }
+            })
+        </script>
+
+    </body>
 
 </html>
