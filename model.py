@@ -1,6 +1,3 @@
-from collections import Counter
-
-
 def make_model_state():
     """Create and return a fresh model state dictionary.
 
@@ -8,9 +5,11 @@ def make_model_state():
     a `trained` flag. Passing this state explicitly avoids module-level
     globals and keeps the API functional-style.
     """
+    # Use plain dicts for portability (no Counter required).
+    # Values are integer counts; callers should treat them as mappings.
     return {
-        'unigrams': Counter(),
-        'bigrams': Counter(),
+        'unigrams': {},
+        'bigrams': {},
         'trained': False
     }
 
@@ -44,9 +43,11 @@ def train_from_text(state, text):
 
     for toks in sents:
         for i in range(len(toks)):
-            unigrams[toks[i]] += 1
+            tok = toks[i]
+            unigrams[tok] = unigrams.get(tok, 0) + 1
         for i in range(len(toks) - 1):
-            bigrams[(toks[i], toks[i+1])] += 1
+            pair = (toks[i], toks[i+1])
+            bigrams[pair] = bigrams.get(pair, 0) + 1
 
     state['trained'] = True
 

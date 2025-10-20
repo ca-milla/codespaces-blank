@@ -47,11 +47,17 @@
                                 <v-card>
                                     <v-card-title>Output</v-card-title>
                                     <v-card-text>
-                                        <div v-if="output">{{ output }}</div>
-                                        <div v-else class="small">No output yet</div>
+                                            <div v-if="output !== null">
+                                                <div v-if="output !== ''">
+                                                    <pre style="white-space:pre-wrap; background:#f6f8fa; padding:8px; border-radius:4px; border:1px solid #ddd;" v-text="output"></pre>
+                                                </div>
+                                                <div v-else class="small">(empty output)</div>
+                                            </div>
+                                            <div v-else class="small">No output yet</div>
                                     </v-card-text>
                                 </v-card>
                             </v-col>
+                            <!-- debug UI removed to keep template minimal -->
                         </v-row>
                     </v-container>
                 </v-main>
@@ -74,7 +80,8 @@
                     loadingGen: false,
                     trainMsg: '',
                     trainError: '',
-                    output: ''
+                    // null = nothing generated yet, '' = generated but empty
+                    output: null,
                 }),
                 methods: {
                     async train() {
@@ -100,7 +107,8 @@
                         }
                     },
                     async generate() {
-                        this.output = ''
+                        // reset to null to indicate a new generation in progress
+                        this.output = null
                         this.loadingGen = true
                         try {
                             const res = await fetch('/generate', {
