@@ -35,6 +35,36 @@ python app.py
 
 L'app si avvia su `http://0.0.0.0:5000` (port configurato in `app.py`). In sviluppo `uvicorn` è avviato con `reload=True`.
 
+Run (alternative e troubleshooting)
+---------------------------------
+
+Avviare con uvicorn (consigliato):
+
+```bash
+# usando il file app.py
+uvicorn app:app --reload --host 0.0.0.0 --port 5000
+```
+
+Cambiare porta:
+
+```bash
+# es. usare la porta 8000
+uvicorn app:app --reload --host 0.0.0.0 --port 8000
+```
+
+Se vedi "Address already in use" significa che un altro processo sta già usando la porta. Per individuare e fermare il processo su Linux:
+
+```bash
+# mostra processi in ascolto sulla porta 5000
+ss -ltnp | grep ':5000'
+# oppure
+lsof -i :5000
+# termina il processo (sostituisci PID con il numero mostrato)
+kill <PID>
+```
+
+Se non vuoi terminare il processo, avvia uvicorn su una porta diversa come mostrato sopra.
+
 API (per sviluppatori backend)
 ------------------------------
 1) GET `/` — pagina HTML (frontend). Non serve autenticazione.

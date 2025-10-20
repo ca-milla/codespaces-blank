@@ -4,21 +4,34 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import requests
 import uvicorn
-from model import train_from_text, is_trained, generate_greedy, vocab_size, make_model_state
+from model import train_from_text, is_trained, generate_greedy, generate_sample, beam_search, vocab_size, make_model_state
 import logging
+
+"""Simple FastAPI application wrapping a tiny n-gram language model.
+
+This module exposes three main routes:
+    - GET `/` : render the single-page frontend
+    - POST `/train` : train the in-memory model from a URL or local path
+    - POST `/generate` : generate text from the model with configurable options
+
+The `/generate` endpoint accepts a JSON body with options that control the
+ngram order and decoding strategy. See the generate() docstring for field
+details.
+"""
+
 
 app = FastAPI()
 
 # mount static folder so templates can reference css/js
 app.mount('/static', StaticFiles(directory='static'), name='static')
 templates = Jinja2Templates(directory='templates')
-# allow templates to use url_for('static', filename=...')
+# allow templates to use url_for('static', filename=...)
 # Starlette's StaticFiles route uses a path parameter named 'path', but many
-# templates (Flask-style) call url_for('static', filename=...). Provide a
+# templates call url_for('static', filename=...). Provide a
 # small wrapper that maps filename->path so templates work without changes.
 def _template_url_for(name: str, **path_params):
     if name == 'static' and 'filename' in path_params:
-        # map Flask-style 'filename' -> Starlette StaticFiles 'path'
+    # map 'filename' -> Starlette StaticFiles 'path'
         path_params['path'] = path_params.pop('filename')
     return app.url_path_for(name, **path_params)
 
@@ -35,6 +48,20 @@ async def index(request: Request):
 
 @app.post('/train')
 async def train(request: Request):
+    """Train the in-memory model.
+
+    Expected JSON body:
+        { "url": "<http-url-or-local-path>" }
+
+    Behavior:
+        - if `url` starts with 'http' the server will fetch it via requests
+        - otherwise it will attempt to open the path as a local file
+
+    Response JSON on success:
+        { "ok": True, "vocab_size": <int>, "unigrams": <int>, "bigrams": <int> }
+
+    On error returns a 400 with `detail` describing the problem.
+    """
     data = await request.json()
     url = data.get('url')
     if not url:
@@ -57,14 +84,59 @@ async def train(request: Request):
 
 @app.post('/generate')
 async def generate(request: Request):
+    """Generate text from the trained model.
+
+    Expected JSON body fields (all optional):
+      - prompt: (string) optional prompt; whitespace-tokenized
+      - length: (int) maximum number of tokens to generate (default 20)
+      - ngram: 'bigram' or 'trigram' (default 'trigram')
+      - decoding: 'greedy' | 'sample' | 'beam' (default 'greedy')
+      - beam_size: (int) used only when decoding=='beam'
+      - top_k: (int) sampling-only parameter (keep top-k candidates)
+      - top_p: (float) sampling-only nucleus parameter in (0,1)
+      - temperature: (float) sampling-only temperature > 0
+
+    Validation:
+      - top_k/top_p/temperature are only accepted when decoding == 'sample'
+
+    Response JSON on success:
+      { "ok": True, "output": "generated text..." }
+
+    Errors return a 400 status with a descriptive `detail`.
+    """
     data = await request.json()
     prompt = data.get('prompt', '')
     length = int(data.get('length', 20))
+    # ngram selection: 'bigram' or 'trigram'
+    ngram = data.get('ngram', 'trigram')
+    prefer_trigram = True if ngram == 'trigram' else False
+    decoding = data.get('decoding', 'greedy')
+    beam_size = int(data.get('beam_size', 3))
+    top_k = int(data.get('top_k', 0))
+    top_p = float(data.get('top_p', 0.0))
+    temperature = float(data.get('temperature', 1.0))
+
+    # validate sampling-only params
+    if decoding != 'sample' and (top_k != 0 or (top_p != 0.0) or (temperature != 1.0)):
+        raise HTTPException(status_code=400, detail='top_k, top_p and temperature are only valid with decoding=sample')
 
     if not is_trained(app.state.model):
         raise HTTPException(status_code=400, detail='model not trained yet')
 
-    out = generate_greedy(app.state.model, prompt, max_len=length)
+    # dispatch to the requested decoding strategy
+    if decoding == 'sample':
+        out = generate_sample(app.state.model, prompt, max_len=length, prefer_trigram=prefer_trigram, top_k=top_k, top_p=top_p, temperature=temperature)
+    elif decoding == 'beam':
+        beams = beam_search(app.state.model, prompt, beam_size=beam_size, steps=length, prefer_trigram=prefer_trigram)
+        # return the highest-scoring sequence joined as string
+        if beams:
+            best_seq = beams[0][1]
+            out = ' '.join(best_seq)
+        else:
+            out = ''
+    else:
+        out = generate_greedy(app.state.model, prompt, max_len=length, prefer_trigram=prefer_trigram)
+
     # return exactly what generator produced
     return JSONResponse({'ok': True, 'output': out})
 

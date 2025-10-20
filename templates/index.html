@@ -36,6 +36,28 @@
                             <v-col cols="12" md="6">
                                 <v-text-field v-model="prompt" label="Prompt (optional)"></v-text-field>
                             </v-col>
+                            <v-col cols="12" md="3">
+                                <v-select v-model="ngram" :items="['bigram','trigram']" label="N-gram"></v-select>
+                            </v-col>
+                            <v-col cols="12" md="3">
+                                <v-select v-model="decoding" :items="['greedy','sample','beam']" label="Decoding"></v-select>
+                            </v-col>
+                            <template v-if="decoding==='beam'">
+                                <v-col cols="6" md="2">
+                                    <v-text-field v-model.number="beam_size" type="number" label="Beam size"></v-text-field>
+                                </v-col>
+                            </template>
+                            <template v-if="decoding==='sample'">
+                                <v-col cols="6" md="2">
+                                    <v-text-field v-model.number="top_k" type="number" label="Top-K"></v-text-field>
+                                </v-col>
+                                <v-col cols="6" md="2">
+                                    <v-text-field v-model.number="top_p" type="number" label="Top-P"></v-text-field>
+                                </v-col>
+                                <v-col cols="6" md="2">
+                                    <v-text-field v-model.number="temperature" type="number" label="Temperature"></v-text-field>
+                                </v-col>
+                            </template>
                             <v-col cols="6" md="3">
                                 <v-text-field v-model.number="length" type="number" label="Max length"></v-text-field>
                             </v-col>
@@ -76,6 +98,12 @@
                     txtUrl: '',
                     prompt: '',
                     length: 20,
+                    ngram: 'trigram',
+                    decoding: 'greedy',
+                    beam_size: 3,
+                    top_k: 0,
+                    top_p: 0.0,
+                    temperature: 1.0,
                     loadingTrain: false,
                     loadingGen: false,
                     trainMsg: '',
@@ -114,7 +142,7 @@
                             const res = await fetch('/generate', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ prompt: this.prompt, length: this.length })
+                                body: JSON.stringify({ prompt: this.prompt, length: this.length, ngram: this.ngram, decoding: this.decoding, beam_size: this.beam_size, top_k: this.top_k, top_p: this.top_p, temperature: this.temperature })
                             })
                             const j = await res.json()
                             if (j.ok) this.output = j.output
@@ -128,6 +156,7 @@
                 }
             })
         </script>
+
 
     </body>
 
