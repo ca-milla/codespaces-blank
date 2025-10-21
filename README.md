@@ -1,4 +1,4 @@
-LM-demo — repo minimo per un piccolo language model (bigram)
+LM-demo — repo minimo per un piccolo language model
 ===========================================================
 
 Breve panoramica
